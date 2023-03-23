@@ -361,7 +361,7 @@ pub struct Builder<'a> {
     generic_attributes: HashSet<&'a str>,
     url_schemes: HashSet<&'a str>,
     url_relative: UrlRelative<'a>,
-    attribute_filter: Option<Box<dyn AttributeFilter>>,
+    attribute_filter: Option<Box<dyn AttributeFilter<'a>>>,
     link_rel: Option<&'a str>,
     allowed_classes: HashMap<&'a str, HashSet<&'a str>>,
     strip_comments: bool,
@@ -1373,8 +1373,9 @@ impl<'a> Builder<'a> {
     /// ```
     pub fn attribute_filter<'cb, CallbackFn>(&mut self, callback: CallbackFn) -> &mut Self
     where
-        CallbackFn: for<'u> Fn(&str, &str, &'u str) -> Option<Cow<'u, str>> + Send + Sync + 'static,
+        CallbackFn: for<'val> Fn(&str, &str, &'val str) -> Option<Cow<'val, str>> + Send + Sync + 'a,
     {
+//    pub fn attribute_filter(&mut self, callback: &dyn AttributeFilter<'a>) -> &mut Self {
         assert!(
             self.attribute_filter.is_none(),
             "attribute_filter can be set only once"
@@ -2695,7 +2696,7 @@ where
     }
 }
 
-impl fmt::Debug for dyn AttributeFilter {
+impl<'a> fmt::Debug for dyn AttributeFilter<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("AttributeFilter")
     }
@@ -2706,16 +2707,16 @@ impl fmt::Debug for dyn AttributeFilter {
 /// See [`attribute_filter`][attribute_filter] for more details.
 ///
 /// [attribute_filter]: struct.Builder.html#method.attribute_filter
-pub trait AttributeFilter: Send + Sync {
+pub trait AttributeFilter<'a>: Send + Sync + 'a {
     /// Return `None` to remove the attribute. Return `Some(str)` to replace it with a new string.
-    fn filter<'a>(&self, _: &str, _: &str, _: &'a str) -> Option<Cow<'a, str>>;
+    fn filter<'val>(&self, _: &str, _: &str, _: &'val str) -> Option<Cow<'val, str>>;
 }
 
-impl<T> AttributeFilter for T
+impl<'a, T> AttributeFilter<'a> for T
 where
-    T: for<'a> Fn(&str, &str, &'a str) -> Option<Cow<'a, str>> + Send + Sync + 'static,
+    for<'val> T: Fn(&str, &str, &'val str) -> Option<Cow<'val, str>> + Send + Sync + 'a,
 {
-    fn filter<'a>(&self, element: &str, attribute: &str, value: &'a str) -> Option<Cow<'a, str>> {
+    fn filter<'val>(&self, element: &str, attribute: &str, value: &'val str) -> Option<Cow<'val, str>> {
         self(element, attribute, value)
     }
 }
